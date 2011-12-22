@@ -67,6 +67,7 @@ public:
         ERR_ESCAPE // bad escape sequence
     } ErrStatus;
     typedef enum {
+        EVENT_NULL,
         EVENT_OBJECT_START,
         EVENT_OBJECT_END,
 
@@ -84,7 +85,7 @@ public:
     char_vec d_curStr; 
     JSON_value d_val;
 
-    JSON_SAX_parser() : d_err(ERR_OK) {}
+    JSON_SAX_parser() : d_event(EVENT_NULL), d_err(ERR_OK) {}
 
     bool is_hex_digit( char c ) { return( ( c>='0' && c<='9') || (c>='A' && c<='F') || (c>='a' && c<='f') ); }
     bool push_unicode( char_vec& s, const char* s )
