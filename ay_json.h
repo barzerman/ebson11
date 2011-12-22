@@ -191,13 +191,6 @@ public:
                 }
             } else { // not quoted 
                 switch( tc ) {
-                case '\\': 
-                    if( isQuoted )  {
-                        isEscaped = !isEscaped;
-                    } else {
-                        return ERR_UNQUOTED;
-                    }
-                    break;
                 case '{': 
                     cb( ( d_event = EVENT_OBJECT_START, *this) ); break;
                 case '}': 
@@ -219,11 +212,6 @@ public:
                         if( !d_curStr.size() ) 
                             isNumber= true;
                     } else {
-                        switch( tc ) {
-                        case ':':
-                        case ',':
-                        case ' ':
-                        }
                         if( isNumber ) 
                             return ERR_UNQUOTED;
                         else
