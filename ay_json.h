@@ -148,7 +148,7 @@ public:
         const char* str_end  = str+s_len;
         const char*t= str, *t_end = str;
         bool isQuoted = false, isEscaped = false, isNumber = false;
-        bool isObject = false; isArray  = false;
+        bool isObject = false; isArray  = false, lastNotSpace = false;
         
         for( ; t< str_end && *t; ++t ) {
             char tc = *t;
@@ -174,20 +174,15 @@ public:
                 if( c ) 
                     d_curStr.push_back(c);
             } else if( isQuoted ) { // quoted not escaped 
-                if( tc == '"' ) {
+                switch( tc ) {
+                case '"':
                     isQuoted = false;
                     setValue( d_val, &(d_curStr), d_curStr.size(), true, isNumber );
-                } else {
-                }
-                isEscaped = false;
-                if( d_readyForValue ) {
-                    if( cb( *this ) )
-                        return ERR_OK;
-                    d_readyForValue = false;
-                } else {
-                    isNumber = false;
-                    isEscaped = false;
-                    isQuoted = false;
+                    cb( (d_event = EVENT_VALUE_ATOMIC,*this) ); 
+                    break;
+                case '\\':  
+                    isEscaped = true;
+                    break;
                 }
             } else { // not quoted 
                 switch( tc ) {
@@ -203,9 +198,15 @@ public:
                     cb( (d_event = EVENT_OBJECT_END,*this) ); 
                     break;
                 case ' ': 
+                    if( lastNotSpace ) {
+                        setValue( d_val, &(d_curStr), d_curStr.size(), true, isNumber );
+                        cb( (d_event = EVENT_VALUE_ATOMIC,*this) ); 
+                        lastNotSpace = false;
+                    }
                     break;
                 case '"': 
                     isQuoted = true;
+                    if( isNumber ) isNumber= false;
                     break;
                 default:
                     if( isdigit(tc) ) {
@@ -218,6 +219,8 @@ public:
                             d_curStr.push_back(tc);
                     }
                     d_curStr.push_back(tc);
+                    if( !lastNotSpace ) 
+                        lastNotSpace = true;
                 }
             }
         }
