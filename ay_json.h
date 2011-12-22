@@ -58,6 +58,7 @@ public:
     typedef std::vector< char > char_vec;
     typedef enum {
         ERR_OK,
+        ERR_TERMINATED,
         ERR_BAD_UNQUOTED, // bad un-quoted constant
         ERR_BAD_NUMBER, // bad un-quoted constant
         ERR_BAD_COMMA, // value expected after comma
@@ -189,20 +190,24 @@ public:
             } else { // not quoted 
                 switch( tc ) {
                 case '{': 
-                    cb( ( d_event = EVENT_OBJECT_START, *this) ); break;
+                    if( cb( ( d_event = EVENT_OBJECT_START, *this) ) )
+                        return ERR_TERMINATE;
+                    break;
                 case '}': 
-                    cb( (d_event = EVENT_NVPAIR_VALUE_END,*this) ); 
-                    cb( (d_event = EVENT_OBJECT_END,*this) ); 
+                    if( cb( (d_event = EVENT_NVPAIR_VALUE_END,*this) ) || cb( (d_event = EVENT_OBJECT_END,*this)) )
+                        return ERR_TERMINATE;
+
                     break;
                 case ':':  cb( (d_event = EVENT_NVPAIR_VALUE_START,*this) ); break; break;
                 case ',': 
-                    cb( (d_event = EVENT_NVPAIR_VALUE_END,*this) ); 
-                    cb( (d_event = EVENT_OBJECT_END,*this) ); 
+                    if( cb( (d_event = EVENT_NVPAIR_VALUE_END,*this) ) || cb( (d_event = EVENT_OBJECT_END,*this) ))
+                        return ERR_TERMINATE;
                     break;
                 case ' ': 
                     if( lastNotSpace ) {
                         setValue( d_val, &(d_curStr), d_curStr.size(), true, isNumber );
-                        cb( (d_event = EVENT_VALUE_ATOMIC,*this) ); 
+                        if( cb( (d_event = EVENT_VALUE_ATOMIC,*this) ) )
+                            return ERR_TERMINATE;
                         lastNotSpace = false;
                     }
                     break;
