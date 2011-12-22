@@ -198,7 +198,7 @@ public:
                     break;
                 case ':':  cb( (d_event = EVENT_NVPAIR_VALUE_START,*this) ); break; break;
                 case ',': 
-                    if( cb( (d_event = EVENT_NVPAIR_VALUE_END,*this) ) || cb( (d_event = EVENT_OBJECT_END,*this) ))
+                    if( cb( (d_event = EVENT_VALUE_ATOMIC,*this)) || cb( (d_event = EVENT_NVPAIR_VALUE_END,*this) ) || cb( (d_event = EVENT_OBJECT_END,*this) ))
                         return ERR_TERMINATE;
                     break;
                 case ' ': 
@@ -229,6 +229,7 @@ public:
                 }
             }
         }
+        return ERR_OK;
     }
 }; 
 
