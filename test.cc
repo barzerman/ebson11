@@ -32,7 +32,7 @@ class CB {
                     cout << "nv atomic: ";
                     switch(parser.d_val.d_type) {
                         case JSON_value::VT_STRING:
-                            cout << parser.d_val.getString() << endl;
+                            cout << "str: " << parser.d_val.getString() << endl;
                         default:
                             cout << endl;
                     }
