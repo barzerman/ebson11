@@ -74,7 +74,7 @@ public:
         EVENT_NVPAIR_VALUE_START, 
         EVENT_NVPAIR_VALUE_END,
 
-        EVENT_NVPAIR_VALUE_ATOMIC
+        EVENT_VALUE_ATOMIC
     } Event;
     Event d_event;
 
@@ -199,23 +199,15 @@ public:
                     }
                     break;
                 case '{': 
-                    if( isObject ) {
-                        return ERR_OBJECT;
-                    } else {
-                        isObject= true;
-                    }
-                    break;
-                case '{': 
-                    d_event = EVENT_OBJECT_START;
-                    cb( *this );
-                    break;
+                    cb( ( d_event = EVENT_OBJECT_START, *this) ); break;
                 case '}': 
-                    d_event = EVENT_OBJECT_END;
-                    cb( *this );
+                    cb( (d_event = EVENT_NVPAIR_VALUE_END,*this) ); 
+                    cb( (d_event = EVENT_OBJECT_END,*this) ); 
                     break;
-                case ':': 
-                    break;
+                case ':':  cb( (d_event = EVENT_NVPAIR_VALUE_START,*this) ); break; break;
                 case ',': 
+                    cb( (d_event = EVENT_NVPAIR_VALUE_END,*this) ); 
+                    cb( (d_event = EVENT_OBJECT_END,*this) ); 
                     break;
                 case ' ': 
                     break;
