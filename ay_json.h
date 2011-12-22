@@ -153,7 +153,7 @@ public:
         for( ; t< str_end && *t; ++t ) {
             char tc = *t;
             if( isEscaped ) {
-                char c = 0;
+                char c;
                 switch( tc ) {
                 case '"': c='"'; break;
                 case '\\':  c = '\\'; break;
@@ -170,9 +170,11 @@ public:
                     else 
                         return ERR_UNICODE;
                     break;
+                default:
+                    return ERR_ESCAPE;
                 }
-                if( c ) 
-                    d_curStr.push_back(c);
+                isEscaped = false;
+                d_curStr.push_back(c);
             } else if( isQuoted ) { // quoted not escaped 
                 switch( tc ) {
                 case '"':
