@@ -46,6 +46,7 @@ int main() {
     const char* json = "{\"a\": [{\"b\": 2}, 3.5, null]}";
     ay::JSON_SAX_parser p;
     CB c;
-    p.parse(c, json, strlen(json));
+    size_t size = strlen(json);
+    p.parse(c, json, size);
 }
 

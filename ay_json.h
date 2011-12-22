@@ -46,7 +46,10 @@ public:
     void setUndefined() { d_type = VT_UNDEFINED; }
     void setBool( bool i ) { d_type = VT_BOOL; d_dta.b = i; }
 
-    void setString( const char* s, size_t s_len ) { new (d_dta.buf) JSON_string(s,s_len); }
+    void setString( const char* s, size_t s_len ) {
+        d_type = VT_STRING;
+        new (d_dta.buf) JSON_string(s,s_len);
+    }
 
     // TODO: slow, for debugging only
     std::string getString() {
@@ -195,6 +198,8 @@ public:
                 case '\\':
                     isEscaped = true;
                     break;
+                default:
+                    d_curStr.push_back(tc);
                 }
             } else { // not quoted
                 switch( tc ) {
@@ -230,7 +235,7 @@ public:
                     break;
                 case '"':
                     isQuoted = true;
-                    if( isNumber ) isNumber= false;
+                    isNumber = false;
                     break;
                 default:
                     if( std::isdigit(tc) ) {
