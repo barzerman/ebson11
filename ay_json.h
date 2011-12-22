@@ -1,8 +1,13 @@
-#ifdef AY_JSON_H
+#ifndef AY_JSON_H
 #define AY_JSON_H
 
 #include <stack>
 #include <vector>
+#include <locale>
+#include <string.h>
+#include <stdint.h>
+#include <stdlib.h>
+
 namespace ay {
 
 struct JSON_string {
@@ -18,11 +23,11 @@ class JSON_value {
     union {
         char    buf[ sizeof(JSON_string) ];
         double  r;
-        int     i4;     
+        int     i4;
         bool    b;
     } d_dta;
-    uint8_t     d_type;
 public:
+    uint8_t     d_type;
     enum {
         VT_STRING,
         VT_NUMBER_INT,
@@ -35,34 +40,33 @@ public:
         VT_UNDEFINED
     };
     void setInt( int i )                       { d_type=VT_NUMBER_INT; d_dta.i4 = i; }
-    void setDoube( double i )                    { d_type=VT_NUMBER_REAL; d_dta.r = i; }
+    void setDouble( double i )                    { d_type=VT_NUMBER_REAL; d_dta.r = i; }
 
     void setNull() { d_type = VT_NULL; }
     void setUndefined() { d_type = VT_UNDEFINED; }
     void setBool( bool i ) { d_type = VT_BOOL; d_dta.b = i; }
 
-    void setString( const char* s, size_t s_len ) { new (d_dta.buf)( JSON_string(s,s_len) ); }
+    void setString( const char* s, size_t s_len ) { new (d_dta.buf) JSON_string(s,s_len); }
+
+    // TODO: slow, for debugging only
+    std::string getString() {
+        JSON_string& s = (JSON_string&) d_dta.buf;
+        return std::string(s.str, s.str_len);
+    }
+
     JSON_value(): d_type(VT_UNDEFINED) {}
 };
 
-template <typename CB>
 class JSON_SAX_parser {
 public:
-    CB* d_cb_obj_start, 
-        d_cb_obj_end, 
-        d_cb_arr_start, 
-        d_cb_arr_end; 
-    bool d_readyForValue;
-public:
-    
     typedef std::vector< char > char_vec;
     typedef enum {
         ERR_OK,
-        ERR_TERMINATED,
+        ERR_TERMINATE,
         ERR_BAD_UNQUOTED, // bad un-quoted constant
         ERR_BAD_NUMBER, // bad un-quoted constant
         ERR_BAD_COMMA, // value expected after comma
-        ERR_SEMICOLON, // semicolon expected 
+        ERR_SEMICOLON, // semicolon expected
         ERR_UNICODE, // invalid \uXXXX unicode char
         ERR_ESCAPE // bad escape sequence
     } ErrStatus;
@@ -71,9 +75,12 @@ public:
         EVENT_OBJECT_START,
         EVENT_OBJECT_END,
 
-        EVENT_NVPAIR_NAME, // passes in the name 
+        EVENT_ARRAY_START,
+        EVENT_ARRAY_END,
 
-        EVENT_NVPAIR_VALUE_START, 
+        EVENT_NVPAIR_NAME,
+
+        EVENT_NVPAIR_VALUE_START,
         EVENT_NVPAIR_VALUE_END,
 
         EVENT_VALUE_ATOMIC
@@ -81,37 +88,37 @@ public:
     Event d_event;
 
     ErrStatus d_err;
-    size_t d_pos; // position 
-    char_vec d_curStr; 
+    size_t d_pos; // position
+    char_vec d_curStr;
     JSON_value d_val;
 
     JSON_SAX_parser() : d_event(EVENT_NULL), d_err(ERR_OK) {}
 
     bool is_hex_digit( char c ) { return( ( c>='0' && c<='9') || (c>='A' && c<='F') || (c>='a' && c<='f') ); }
-    bool push_unicode( char_vec& s, const char* s )
-        { 
+    bool push_unicode( char_vec& v, const char* s )
+        {
             if( is_hex_digit(s[0]) && is_hex_digit(s[1])&& is_hex_digit(s[2]) && is_hex_digit(s[3])) {
-                s.push_back( (char)(s[1]) + ((char)(s[0]))<< 4 );
-                s.push_back( (char)(s[3]) + ((char)(s[2]))<< 4 );
+                v.push_back( (char)(s[1]) + ((char)(s[0]))<< 4 );
+                v.push_back( (char)(s[3]) + ((char)(s[2]))<< 4 );
                 return true;
             } else
                 return false;
         }
-    void setValue( JSON_value& val, const char* t, const char* s_len, bool quoteInFront, bool isNumber )
+    ErrStatus setValue( JSON_value& val, const char* t, size_t s_len, bool quoteInFront, bool isNumber )
     {
         if( isNumber ) {
-            char numbuf[ 32 ]; 
+            char numbuf[ 32 ];
             size_t l = (s_len<32?s_len:31);
-            strncpy( numbuf, s, l );
+            strncpy( numbuf, t, l );
             numbuf[l]=0;
-            if( strchr(numbuf,'.') ) 
+            if( strchr(numbuf,'.') )
                 val.setDouble( atof(numbuf) );
-            else 
+            else
                 val.setInt( atoi(numbuf) );
             return ERR_OK;
         } else {
             if( !quoteInFront ) {
-                switch( *s ) {
+                switch( *t ) {
                 case 't':
                     if( t[1] == 'r' && t[2] == 'u' && t[3] == 'e' && !t[4] ) {
                         val.setBool( true );
@@ -137,21 +144,23 @@ public:
                     }
                     break;
                 default:
-                    val.setString( s, s_len );
+                    val.setString( t, s_len );
                     return ERR_OK;
                 }
             } else {
-                val.setString( s, s_len );
+                val.setString( t, s_len );
                 return ERR_OK;
             }
         }
     }
+
+    template <typename CB>
     int parse( CB& cb, const char* str, size_t s_len ) {
         const char* str_end  = str+s_len;
         const char*t= str, *t_end = str;
         bool isQuoted = false, isEscaped = false, isNumber = false;
-        bool isObject = false; isArray  = false, lastNotSpace = false;
-        
+        bool isObject = false, isArray  = false, lastNotSpace = false;
+
         for( ; t< str_end && *t; ++t ) {
             char tc = *t;
             if( isEscaped ) {
@@ -164,12 +173,11 @@ public:
                 case 'f':  c = '\f'; break;
                 case 'n':  c = '\n'; break;
                 case 'r':  c = '\r'; break;
-                case 'r':  c = '\r'; break;
                 case 't':  c = '\t'; break;
-                case 'u':  c = '\t'; 
-                    if( t+3< str_end && push_unicode(d_curStr,t) ) 
+                case 'u':  c = '\t';
+                    if( t+3< str_end && push_unicode(d_curStr,t) )
                         t+= 3;
-                    else 
+                    else
                         return ERR_UNICODE;
                     break;
                 default:
@@ -177,64 +185,72 @@ public:
                 }
                 isEscaped = false;
                 d_curStr.push_back(c);
-            } else if( isQuoted ) { // quoted not escaped 
+            } else if( isQuoted ) { // quoted not escaped
                 switch( tc ) {
                 case '"':
                     isQuoted = false;
-                    setValue( d_val, &(d_curStr), d_curStr.size(), true, isNumber );
-                    cb( (d_event = EVENT_VALUE_ATOMIC,*this) ); 
+                    setValue( d_val, &d_curStr[0], d_curStr.size(), true, isNumber );
+                    cb( (d_event = EVENT_VALUE_ATOMIC,*this) );
                     break;
-                case '\\':  
+                case '\\':
                     isEscaped = true;
                     break;
                 }
-            } else { // not quoted 
+            } else { // not quoted
                 switch( tc ) {
-                case '{': 
+                case '[':
+                    if( cb( ( d_event = EVENT_ARRAY_START, *this) ) )
+                        return ERR_TERMINATE;
+                    break;
+                case ']':
+                    if( cb( (d_event = EVENT_ARRAY_END,*this) ))
+                        return ERR_TERMINATE;
+                    break;
+                case '{':
                     if( cb( ( d_event = EVENT_OBJECT_START, *this) ) )
                         return ERR_TERMINATE;
                     break;
-                case '}': 
+                case '}':
                     if( cb( (d_event = EVENT_NVPAIR_VALUE_END,*this) ) || cb( (d_event = EVENT_OBJECT_END,*this)) )
                         return ERR_TERMINATE;
 
                     break;
                 case ':':  cb( (d_event = EVENT_NVPAIR_VALUE_START,*this) ); break; break;
-                case ',': 
+                case ',':
                     if( cb( (d_event = EVENT_VALUE_ATOMIC,*this)) || cb( (d_event = EVENT_NVPAIR_VALUE_END,*this) ) || cb( (d_event = EVENT_OBJECT_END,*this) ))
                         return ERR_TERMINATE;
                     break;
-                case ' ': 
+                case ' ':
                     if( lastNotSpace ) {
-                        setValue( d_val, &(d_curStr), d_curStr.size(), true, isNumber );
+                        setValue( d_val, &d_curStr[0], d_curStr.size(), true, isNumber );
                         if( cb( (d_event = EVENT_VALUE_ATOMIC,*this) ) )
                             return ERR_TERMINATE;
                         lastNotSpace = false;
                     }
                     break;
-                case '"': 
+                case '"':
                     isQuoted = true;
                     if( isNumber ) isNumber= false;
                     break;
                 default:
-                    if( isdigit(tc) ) {
-                        if( !d_curStr.size() ) 
+                    if( std::isdigit(tc) ) {
+                        if( !d_curStr.size() )
                             isNumber= true;
                     } else {
-                        if( isNumber ) 
-                            return ERR_UNQUOTED;
+                        if( isNumber )
+                            return ERR_BAD_UNQUOTED;
                         else
                             d_curStr.push_back(tc);
                     }
                     d_curStr.push_back(tc);
-                    if( !lastNotSpace ) 
+                    if( !lastNotSpace )
                         lastNotSpace = true;
                 }
             }
         }
         return ERR_OK;
     }
-}; 
+};
 
-} // ay namespace ends 
+} // ay namespace ends
 #endif // AY_JSON_H
