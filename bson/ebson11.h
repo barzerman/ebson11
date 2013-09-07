@@ -1,10 +1,3 @@
-/* 2013 Barzer 
-
-EBSON11 v1.0 - Encoder of BSON in c++11 
-
-http://bsonspec.org/#/specification
-implements most common types (not all)
-*/
 /**********************************************************************
  * eBSON11 — BSON encoder in C++11.
  *
@@ -42,143 +35,51 @@ implements most common types (not all)
 #include <vector>
 #include <cstring>
 #include <iostream>
+#include "stringnum.h"
+#include "uninit_vector.h"
 
 namespace ebson11
 {
 namespace detail
 {
-	/** @brief A service class to be used in place of std::vector for performance reasons.
-	 *
-	 * It doesn't initialize vector values (especially on resize()), thus cutting Encoder
-	 * run time roughly in two. It also uses memcpy for copying.
-	 *
-	 * @note This vector should be only used with POD types.
-	 *
-	 * @param Alloc Isn't used internally, it is present to keep type signature compatible
-	 * with std::vector.
-	 */
-	template<typename T, typename Alloc = std::allocator<T>>
-	class uninit_vector
+	template<typename Impl>
+	struct TypeInterface
 	{
-		T *m_data = nullptr;
-		size_t m_capacity = 0;
-		size_t m_size = 0;
 	public:
-		typedef uint8_t value_type;
-
-		uninit_vector() {}
-		~uninit_vector() { delete [] m_data; }
-
-		uninit_vector(const uninit_vector<T>& other)
+		// individual value encoders
+		void encode_double(double i, const char *name = 0)
 		{
-			reserve(other.m_size);
-			m_size = other.m_size;
-			memcpy(m_data, other.m_data, other.m_size * sizeof(T));
+			static_assert(sizeof(double) == 8, "we don't support non-8-bytes-doubles yet");
+			static_cast<Impl*>(this)->encode_type(i, 0x01, name);
 		}
 
-		uninit_vector(uninit_vector<T>&& other) { swap(other); }
+		void encode_int32(int32_t i, const char *name = 0) { static_cast<Impl*>(this)->encode_type(i, 0x10, name); }
+		void encode_bool(bool i, const char *name = 0) { static_cast<Impl*>(this)->encode_type(static_cast<uint8_t>(i), 0x08, name); }
 
-		uninit_vector& operator=(const uninit_vector<T>& other)
+		void encode_string(const char *str, const char *name = 0)
 		{
-			reserve(other.m_size);
-			memcpy(m_data, other.m_data, other.m_size * sizeof(T));
-		}
+			char pre[4] = { 0 };
+			const auto strlenp = static_cast<int32_t>(std::strlen(str)) + 1;
 
-		uninit_vector& operator=(uninit_vector<T>&& other) { swap(other); }
+			pre[0] = strlenp & 0x000000ff;
+			pre[1] = strlenp & 0x0000ff00;
+			pre[2] = strlenp & 0x00ff0000;
+			pre[3] = strlenp & 0xff000000;
 
-		const T* begin() const { return m_data; }
-		const T* end() const { return m_data + m_size; }
+			char post = 0;
 
-		void swap(uninit_vector& other)
-		{
-			std::swap(other.m_data, m_data);
-			std::swap(other.m_capacity, m_capacity);
-			std::swap(other.m_size, m_size);
-		}
-
-		void reserve(size_t capacity)
-		{
-			if (capacity <= m_capacity)
-				return;
-
-			uninit_vector<T> other;
-			other.m_data = new T[capacity];
-			other.m_capacity = capacity;
-			other.m_size = m_size;
-
-			if (m_data)
-				memcpy(other.m_data, m_data, sizeof(T) * m_size);
-
-			swap(other);
-		}
-
-		void resize(size_t size)
-		{
-			reserve(size);
-			m_size = size;
-		}
-
-		void push_back(const T& t)
-		{
-			if (m_size == m_capacity)
-				reserve(m_capacity * 2);
-
-			m_data[m_size++] = t;
-		}
-
-		const T& operator[](size_t p) const { return m_data[p]; }
-
-		T& operator[](size_t p) { return m_data[p]; }
-
-		size_t size() const { return m_size; }
-
-		std::vector<T> to_std_vector() const
-		{
-			std::vector<T> result;
-			result.resize(size());
-			memcpy(&result[0], m_data, sizeof(T) * size());
-			return result;
-		}
-
-		bool operator==(const uninit_vector<T>& other) const
-		{
-			return m_size == other.m_size &&
-					!memcmp(m_data, other.m_data, m_size * sizeof(T));
-		}
-
-		bool operator==(const std::vector<T>& other) const
-		{
-			return m_size == other.size() &&
-					!memcmp(m_data, &other[0], m_size * sizeof(T));
-		}
-
-		template<typename U>
-		bool operator!=(const U& other) const
-		{
-			return !(*this == other);
-		}
-
-		bool operator<(const uninit_vector<T>& other) const
-		{
-			if (m_size != other.size())
-				return m_size < other.size();
-
-			return memcmp(m_data, other.m_data) < 0;
-		}
-
-		bool operator<(const std::vector<T>& other) const
-		{
-			if (m_size != other.size())
-				return m_size < other.size();
-
-			return memcmp(m_data, &other[0]) < 0;
+			static_cast<Impl*>(this)->template encode_bytes<4, 1>(str, strlenp - 1, pre, &post, 0x2, name);
 		}
 	};
 } // namespace detail
 
+class DocumentGuard;
+
 template<template<typename, typename> class BufType = detail::uninit_vector>
-class EncoderT
+class EncoderT : public detail::TypeInterface<EncoderT<BufType>>
 {
+	friend struct detail::TypeInterface<EncoderT<BufType>>;
+	friend class DocumentGuard;
 public:
 	typedef BufType<uint8_t, std::allocator<uint8_t>> BufType_t;
 private:
@@ -247,6 +148,29 @@ private:
 		*static_cast<T*>(new_bytes(sizeof(T))) = t;
 		stack_increment_sz(sz);
 	}
+
+	template<int PreSize, int PostSize>
+	void encode_bytes(const char *bytes, int32_t bytesLength,
+			const char *pre, const char *post,
+			uint8_t typeId, const char *name)
+	{
+		d_buf.push_back(typeId);
+
+		const int32_t sumSz = 1 + encode_name(name) + PreSize + bytesLength + PostSize;
+
+		auto mem = new_bytes(PreSize + bytesLength + PostSize);
+		if (PreSize)
+		{
+			memcpy(mem, pre, PreSize);
+			mem = static_cast<char*>(mem) + PreSize;
+		}
+		memcpy(mem, bytes, bytesLength);
+		mem = static_cast<char*>(mem) + bytesLength;
+		if (PostSize)
+			std::memcpy(mem, post, PostSize);
+
+		stack_increment_sz(sumSz);
+	}
 public:
 	enum { DEFAULT_RESERVE_SZ = 1024*64 };
 
@@ -294,32 +218,6 @@ public:
 		d_buf.swap(out);
 	}
 
-	// individual value encoders
-	void encode_double(double i, const char *name = 0)
-	{
-		static_assert(sizeof(double) == 8, "we don't support non-8-bytes-doubles yet");
-		encode_type(i, 0x01, name);
-	}
-
-	void encode_int32(int32_t i, const char *name = 0) { encode_type(i, 0x10, name); }
-	void encode_bool(bool i, const char *name = 0) { encode_type(static_cast<uint8_t>(i), 0x08, name); }
-
-	void encode_string(const char *str, const char *name = 0)
-	{
-		d_buf.push_back(0x2);
-
-		const auto strlen = static_cast<int32_t>(std::strlen(str));
-		const int32_t sumSz = 1 + encode_name(name) + 4 + strlen + 1;
-
-		auto mem = new_bytes(4 + strlen + 1);
-		*static_cast<uint32_t*>(mem) = (strlen + 1);
-		mem = static_cast<char*>(mem) + 4;
-		memcpy(mem, str, strlen);
-		mem = static_cast<char*>(mem) + strlen;
-		*static_cast<uint8_t*>(mem) = 0;
-		stack_increment_sz(sumSz);
-	}
-
 	// document or array begin (pushes the stack)
 	void document_start(bool isArr = false, const char *name = 0)
 	{
@@ -334,10 +232,41 @@ public:
 
 typedef EncoderT<> Encoder;
 
-struct DocumentGuard
+class DocumentGuard : public detail::TypeInterface<DocumentGuard>
 {
-	Encoder& encoder;
+	friend struct detail::TypeInterface<DocumentGuard>;
 
+	Encoder& m_encoder;
+
+	const bool m_isArr;
+	StrRepDecimal m_arrIdx;
+
+	template<typename T>
+	void encode_type(T t, uint8_t typeId, const char *name)
+	{
+		if (!m_isArr)
+			m_encoder.encode_type(t, typeId, name);
+		else
+		{
+			m_encoder.encode_type(t, typeId, m_arrIdx.c_str());
+			++m_arrIdx;
+		}
+	}
+
+	template<int PreSize, int PostSize>
+	void encode_bytes(const char *bytes, int32_t bytesLength,
+			const char *pre, const char *post,
+			uint8_t typeId, const char *name)
+	{
+		if (!m_isArr)
+			m_encoder.encode_bytes<PreSize, PostSize>(bytes, bytesLength, pre, post, typeId, name);
+		else
+		{
+			m_encoder.encode_bytes<PreSize, PostSize>(bytes, bytesLength, pre, post, typeId, m_arrIdx.c_str());
+			++m_arrIdx;
+		}
+	}
+public:
 	DocumentGuard(const DocumentGuard&) = delete;
 	DocumentGuard(DocumentGuard&&) = delete;
 
@@ -345,14 +274,15 @@ struct DocumentGuard
 	DocumentGuard& operator=(DocumentGuard&&) = delete;
 
 	DocumentGuard(Encoder& e, bool isArr = false, const char *name = 0)
-	: encoder(e)
+	: m_encoder(e)
+	, m_isArr(isArr)
 	{
-		encoder.document_start(isArr, name );
+		m_encoder.document_start(isArr, name );
 	}
 
 	~DocumentGuard()
 	{
-		encoder.document_end();
+		m_encoder.document_end();
 	}
 };
 } // namespace ebson11
