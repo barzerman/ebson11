@@ -38,8 +38,8 @@ uninit_vector.h - performance optimized std::vector replacement (30-50% improvs 
 
 FILES
 
-bsontest.cppmain test driver and usage example (self explanatory) - will build everywhere
-bsoncompare_mongodb.cpp - performance comparison test driver to compare ebson11 and BSONObjectBuilder needs <chrono>
+bsontest.cpp            - main test driver and usage example (self explanatory). 
+bsoncompare_mongodb.cpp - performance comparison  ebson11 vs. BSONObjectBuilder needs <chrono>
 
 This is highly speed optimized BSON encoder for c++11 .
 
