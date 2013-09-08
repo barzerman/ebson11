@@ -1,6 +1,6 @@
 /// performance comparision tool between native mongoDB BSONObjectBuilder and ebson11
 /** Compile with
- * g++-4.8.1 -g -pthread -O3 -march=native -fomit-frame-pointer -std=c++11 -Wall -Wextra ../bsontest.cpp -lmongoclient -lcrypto -lssl -lboost_system -lboost_thread -lboost_filesystem -o bsontest
+ * g++-4.8.1 -g -pthread -O3 -march=native -fomit-frame-pointer -std=c++11 -Wall -Wextra bsoncompare_mongodb.cpp -lmongoclient -lcrypto -lssl -lboost_system -lboost_thread -lboost_filesystem -o bsontest
  */
 
 #include "ebson11.h"
