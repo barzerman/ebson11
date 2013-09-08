@@ -29,8 +29,17 @@
  * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS IN THE SOFTWARE.
  **********************************************************************/
+This is a speed optimized BSON encoder for c++11 . In order to encode BSON all you need is just the header files
 
-This directory contains header only BSON encoder ebson11
+ebson11.h	      - the main header - the only file needed to be explicitly included 
+stringnum.h	    - performance optimized decimal string representation of a positive integer 64 bit, 
+                  which can be incremented. 100 times faster than snprintf.  
+uninit_vector.h - performance optimized std::vector replacement (30-50% improvs over std::vector in this case)
+
+FILES
+
+bsontest.cppmain test driver and usage example (self explanatory) - will build everywhere
+bsoncompare_mongodb.cpp - performance comparison test driver to compare ebson11 and BSONObjectBuilder needs <chrono>
 
 This is highly speed optimized BSON encoder for c++11 .
 
