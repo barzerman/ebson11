@@ -1,8 +1,9 @@
 /**********************************************************************
  * eBSON11 — BSON encoder in C++11.
- *
- * Copyright (C) 2013  Georg Rudoy		<georg@barzer.net>
- * Copyright (C) 2013  Andre Yanpolsky	<andre@barzer.net>
+ * Copyright Barzer LLC <info@barzer.net>
+ * Authors:
+ * Georg Rudoy		<georg@barzer.net>
+ * Andre Yanpolsky	<andre@barzer.net>
  *
  * Boost Software License - Version 1.0 - Sep 04th, 2003
  *
